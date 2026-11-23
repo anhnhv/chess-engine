@@ -44,58 +44,431 @@ class ChessGame {
     this.allowCastling = allowCastling;
   }
 
-  getAvailableMoves(coord: Coordinate): Coordinate[] {
-    const position = this.getPosition(coord);
-
-    if (position.piece === Piece.p) {
-      return this.calcualtePawnSteps(position);
-    }
-
-    return [];
+  private static isValidCoord(coord: Coordinate) {
+    return coord.x >= 0 && coord.x <= 7 && coord.y >= 0 && coord.y <= 7;
   }
 
-  private getPosition(coord: Coordinate): Position {
-    const pos = this.board.find(
+  private static getPosition(
+    coord: Coordinate,
+    board: Position[],
+  ): Position | undefined {
+    if (!ChessGame.isValidCoord(coord)) {
+      return;
+    }
+
+    const pos = board.find(
       (position) =>
         position.coord.x === coord.x && position.coord.y === coord.y,
     );
-    return pos as Position;
+
+    return (
+      pos ?? {
+        coord: { ...coord },
+      }
+    );
   }
 
-  private stepsToCoords(from: Coordinate, steps: number[][]): Coordinate[] {
-    const coords = steps.map((step) => ({
-      x: from.x + step[0],
-      y: from.y + step[1],
-    }));
+  private removeInvalidPositions(coords: Coordinate[]) {
+    const validPositions = coords.filter((coord) => {
+      return coord.x >= 0 && coord.x <= 7 && coord.y >= 0 && coord.y <= 7;
+    });
 
-    return coords;
+    return validPositions;
   }
 
-  private calcualtePawnSteps(position: Position) {
-    let steps: number[][] = [];
-    const { x, y } = position.coord;
-    if (position.side === Side.w) {
-      steps = [[0, 1]];
+  static findNearestPiece(board: ChessMap, fromPos: Position, step: number[]) {
+    let currCoord = {
+      x: fromPos.coord.x,
+      y: fromPos.coord.y,
+    };
 
-      if (position.coord.y === 1) {
-        steps.push([0, 2]);
+    do {
+      currCoord.x = currCoord.x + step[0];
+      currCoord.y = currCoord.y + step[1];
+
+      const currPos = ChessGame.getPosition(currCoord, board);
+      if (currPos?.piece !== undefined) {
+        return currPos;
       }
 
-      const pos1 = this.getPosition({ x: x - 1, y: y + 1 });
-      if (pos1.side === Side.b) {
-        steps.push([-1, 1]);
+      if (!ChessGame.isValidCoord(currCoord)) {
+        return;
       }
-    } else if (position.side === Side.b) {
-      steps = [[0, -1]];
+    } while (1);
+  }
 
-      if (position.coord.y === 6) {
-        steps.push([0, -2]);
+  private isKingAttacked(assumBoard: ChessMap, side: Side) {
+    const kingPos = assumBoard.find(
+      (pos) => pos.side === side && pos.piece === Piece.k,
+    );
+    if (!kingPos) {
+      return false;
+    }
+
+    const stepRules = [
+      [0, 1],
+      [1, 0],
+      [0, -1],
+      [-1, 0],
+    ];
+
+    for (const stepRule of stepRules) {
+      const nearestPiece = ChessGame.findNearestPiece(
+        assumBoard,
+        kingPos,
+        stepRule,
+      );
+      if (!nearestPiece || nearestPiece.side === side) {
+        continue;
+      }
+
+      let rawSteps: Coordinate[] = [];
+      if (nearestPiece?.piece === Piece.p) {
+        rawSteps = this.calcualtePawnSteps(nearestPiece, assumBoard);
+      } else if (nearestPiece?.piece === Piece.r) {
+        rawSteps = this.calcualteRookSteps(nearestPiece, assumBoard);
+      }
+
+      const foundChecked = rawSteps.find((step) => {
+        if (step.x === kingPos.coord.x && step.y === kingPos.coord.y) {
+          return true;
+        }
+      });
+
+      return true;
+      // else if (nearestPiece?.piece === Piece.b) {
+      //   rawSteps = this.calcualteBishopSteps(nearestPiece);
+      // } else if (nearestPiece?.piece === Piece.q) {
+      //   rawSteps = this.calcualteBishopSteps(nearestPiece).concat(
+      //     this.calcualteRookSteps(nearestPiece),
+      //   );
+      // } else if (nearestPiece?.piece === Piece.n) {
+      //   rawSteps = this.calcualteKnightSteps(nearestPiece);
+      // } else if (nearestPiece?.piece === Piece.k) {
+      //   rawSteps = this.calcualteKingSteps(nearestPiece);
+      // }
+    }
+
+    return false;
+  }
+
+  private isOccupied(fromPos: Position, toPos: Position) {
+    if (fromPos.side === toPos.side && fromPos.side) {
+      return true;
+    }
+
+    const fromCoord = fromPos.coord;
+    const toCoord = toPos.coord;
+
+    let step: number[] = [0, 0];
+    if (fromCoord.y === toCoord.y) {
+      step = [toCoord.x - fromCoord.x > 0 ? 1 : -1, 0];
+    } else if (fromCoord.x === toCoord.x) {
+      step = [0, toCoord.y - fromCoord.y > 0 ? 1 : -1];
+    } else if (toCoord.x - fromCoord.x === toCoord.y - fromCoord.y) {
+      step = [
+        toCoord.x - fromCoord.x > 0 ? 1 : -1,
+        toCoord.y - fromCoord.y > 0 ? 1 : -1,
+      ];
+    }
+
+    if (step[0] === 0 && step[1] === 0) {
+      return true;
+    }
+
+    const currCoord = {
+      x: fromCoord.x + step[0],
+      y: fromCoord.y + step[1],
+    };
+    let currPos = this.getPosition(currCoord);
+
+    while (
+      currPos?.coord.x !== toPos.coord.x &&
+      currPos?.coord.y !== toPos.coord.y
+    ) {
+      if (currPos?.side) {
+        return true;
+      }
+
+      if (currPos) {
+        currPos = this.getPosition({
+          x: currPos?.coord?.x + step[0],
+          y: currPos?.coord?.y + step[1],
+        });
       }
     }
 
-    return steps.length
-      ? this.stepsToCoords(position.coord, steps)
-      : [{ x: -1, y: -1 }];
+    return false;
+  }
+
+  private getAssumedBoard(fromPos: Position, toPos: Position) {
+    const currentBoard: Position[] = JSON.parse(JSON.stringify(this.board));
+    const tempPos: Position = JSON.parse(JSON.stringify(fromPos));
+    tempPos.coord.x = toPos.coord.x;
+    tempPos.coord.y = toPos.coord.y;
+
+    let foundToPos: Position;
+    for (let i = currentBoard.length - 1; i >= 0; i--) {
+      const currentPos = currentBoard[i];
+
+      if (!currentPos) {
+        console.log("currentPos", currentPos);
+        continue;
+      }
+      if (
+        currentPos.coord.x === fromPos.coord.x &&
+        currentPos.coord.y === fromPos.coord.y
+      ) {
+        currentBoard.splice(i, 1);
+      } else if (
+        currentPos.coord.x === toPos.coord.x &&
+        currentPos.coord.y === toPos.coord.y
+      ) {
+        currentBoard.splice(i, 1);
+      }
+    }
+
+    currentBoard.push(tempPos);
+
+    return currentBoard;
+  }
+
+  getAvailableMoves(coord: Coordinate): Coordinate[] {
+    const currPos = this.getPosition(coord);
+    if (!currPos || currPos?.side === undefined) {
+      return [];
+    }
+
+    let rawSteps: Coordinate[] = [];
+    if (currPos?.piece === Piece.p) {
+      rawSteps = this.calcualtePawnSteps(currPos);
+    } else if (currPos?.piece === Piece.r) {
+      rawSteps = this.calcualteRookSteps(currPos);
+    } else if (currPos?.piece === Piece.b) {
+      rawSteps = this.calcualteBishopSteps(currPos);
+    } else if (currPos?.piece === Piece.q) {
+      rawSteps = this.calcualteBishopSteps(currPos).concat(
+        this.calcualteRookSteps(currPos),
+      );
+    } else if (currPos?.piece === Piece.n) {
+      rawSteps = this.calcualteKnightSteps(currPos);
+    } else if (currPos?.piece === Piece.k) {
+      rawSteps = this.calcualteKingSteps(currPos);
+    }
+
+    let validPositions = this.removeInvalidPositions(rawSteps);
+
+    validPositions = validPositions.filter((pos) => {
+      const assumPos = this.getPosition(pos);
+      if (!assumPos) {
+        return false;
+      }
+
+      const assumeBoard = this.getAssumedBoard(currPos, assumPos);
+
+      if (this.isKingAttacked(assumeBoard, currPos.side as Side)) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return validPositions;
+  }
+
+  private getPosition(
+    coord: Coordinate,
+    board?: Position[],
+  ): Position | undefined {
+    if (coord.x < 0 || coord.x > 7 || coord.y < 0 || coord.y > 7) {
+      return;
+    }
+
+    const pos = (board ?? this.board).find(
+      (position) =>
+        position.coord.x === coord.x && position.coord.y === coord.y,
+    );
+
+    return (
+      pos ?? {
+        coord: { ...coord },
+      }
+    );
+  }
+
+  private stepsToCoords(
+    fromPos: Position,
+    stepRules: number[][],
+    maxStep = 0,
+    board?: Position[],
+  ): Coordinate[] {
+    const validCoords = [];
+    for (const currStepRule of stepRules) {
+      let currCoord = { ...fromPos.coord };
+      let currPos = this.getPosition(currCoord, board);
+      let stepCount = 0;
+
+      do {
+        currCoord = {
+          x: currCoord.x + currStepRule[0],
+          y: currCoord.y + currStepRule[1],
+        };
+        currPos = this.getPosition(currCoord, board);
+
+        if (currPos) {
+          const isOccupied = currPos.side !== undefined;
+
+          if (isOccupied) {
+            const isSameSide = currPos.side === fromPos.side;
+
+            if (!isSameSide) {
+              validCoords.push(currPos.coord);
+              stepCount++;
+            }
+
+            break;
+          }
+
+          validCoords.push(currPos.coord);
+          stepCount++;
+        }
+      } while (currPos && (!maxStep || stepCount < maxStep));
+    }
+
+    return validCoords;
+  }
+
+  private calcualteKnightSteps(position: Position) {
+    const coords: Coordinate[] = [];
+    const { x, y } = position.coord;
+
+    const stepRules = [
+      [-1, 2],
+      [-1, -2],
+      [1, 2],
+      [1, -2],
+      [2, 1],
+      [2, -1],
+      [-2, 1],
+      [-2, -1],
+    ];
+    return this.stepsToCoords(position, stepRules, 1);
+  }
+
+  private calcualteBishopSteps(position: Position) {
+    const coords: Coordinate[] = [];
+    const { x, y } = position.coord;
+
+    const stepRules = [
+      [-1, 1],
+      [1, 1],
+      [1, -1],
+      [-1, -1],
+    ];
+    return this.stepsToCoords(position, stepRules);
+  }
+
+  private calcualteKingSteps(position: Position) {
+    const coords: Coordinate[] = [];
+    const { x, y } = position.coord;
+
+    const stepRules = [
+      [0, 1],
+      [1, 0],
+      [0, -1],
+      [-1, 0],
+      [-1, 1],
+      [1, 1],
+      [1, -1],
+      [-1, -1],
+    ];
+    return this.stepsToCoords(position, stepRules, 1);
+  }
+
+  private calcualteRookSteps(position: Position, board?: Position[]) {
+    const stepRules = [
+      [0, 1],
+      [1, 0],
+      [0, -1],
+      [-1, 0],
+    ];
+    return this.stepsToCoords(position, stepRules, 0, board);
+  }
+
+  private calcualtePawnSteps(position: Position, board?: Position[]) {
+    const coords: Coordinate[] = [];
+    const { x, y } = position.coord;
+    if (position.side === Side.w) {
+      const front1Pos = this.getPosition(
+        {
+          ...position.coord,
+          y: position.coord.y + 1,
+        },
+        board,
+      );
+      const front2Pos = this.getPosition(
+        {
+          ...position.coord,
+          y: position.coord.y + 2,
+        },
+        board,
+      );
+
+      if (front1Pos && !front1Pos.piece) {
+        coords.push(front1Pos.coord);
+
+        if (position.coord.y === 1 && front2Pos && !front2Pos.piece) {
+          coords.push(front2Pos.coord);
+        }
+      }
+
+      const leftPos = this.getPosition({ x: x - 1, y: y + 1 }, board);
+      const rightPos = this.getPosition({ x: x + 1, y: y + 1 }, board);
+
+      if (leftPos?.side === Side.b) {
+        coords.push(leftPos.coord);
+      }
+
+      if (rightPos?.side === Side.b) {
+        coords.push(rightPos.coord);
+      }
+    } else if (position.side === Side.b) {
+      const front1Pos = this.getPosition(
+        {
+          ...position.coord,
+          y: position.coord.y - 1,
+        },
+        board,
+      );
+      const front2Pos = this.getPosition(
+        {
+          ...position.coord,
+          y: position.coord.y - 2,
+        },
+        board,
+      );
+
+      if (front1Pos && !front1Pos.piece) {
+        coords.push(front1Pos.coord);
+
+        if (position.coord.y === 6 && front2Pos && !front2Pos.piece) {
+          coords.push(front2Pos.coord);
+        }
+      }
+
+      const leftPos = this.getPosition({ x: x - 1, y: y - 1 }, board);
+      const rightPos = this.getPosition({ x: x + 1, y: y - 1 }, board);
+
+      if (leftPos?.side === Side.w) {
+        coords.push(leftPos.coord);
+      }
+
+      if (rightPos?.side === Side.w) {
+        coords.push(rightPos.coord);
+      }
+    }
+
+    return coords;
   }
 }
 
