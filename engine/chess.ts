@@ -106,10 +106,16 @@ class ChessGame {
     }
 
     const stepRules = [
+      // Straight lines:
       [0, 1],
       [1, 0],
       [0, -1],
       [-1, 0],
+      // Diagonals:
+      [-1, -1],
+      [1, 1],
+      [1, -1],
+      [-1, -1],
     ];
 
     for (const stepRule of stepRules) {
@@ -127,6 +133,8 @@ class ChessGame {
         rawSteps = this.calcualtePawnSteps(nearestPiece, assumBoard);
       } else if (nearestPiece?.piece === Piece.r) {
         rawSteps = this.calcualteRookSteps(nearestPiece, assumBoard);
+      }  else if (nearestPiece?.piece === Piece.k) {
+        rawSteps = this.calcualteKingSteps(nearestPiece, assumBoard);
       }
 
       const foundChecked = rawSteps.find((step) => {
@@ -135,7 +143,10 @@ class ChessGame {
         }
       });
 
-      return true;
+      if (foundChecked) {
+        return true;
+      }
+
       // else if (nearestPiece?.piece === Piece.b) {
       //   rawSteps = this.calcualteBishopSteps(nearestPiece);
       // } else if (nearestPiece?.piece === Piece.q) {
@@ -207,12 +218,10 @@ class ChessGame {
     tempPos.coord.x = toPos.coord.x;
     tempPos.coord.y = toPos.coord.y;
 
-    let foundToPos: Position;
     for (let i = currentBoard.length - 1; i >= 0; i--) {
       const currentPos = currentBoard[i];
 
       if (!currentPos) {
-        console.log("currentPos", currentPos);
         continue;
       }
       if (
@@ -264,7 +273,10 @@ class ChessGame {
         return false;
       }
 
+      console.log('currPos', currPos)
+      console.log('assumPos', assumPos)
       const assumeBoard = this.getAssumedBoard(currPos, assumPos);
+      console.log('assumeBoard', assumeBoard)
 
       if (this.isKingAttacked(assumeBoard, currPos.side as Side)) {
         return false;
@@ -339,9 +351,6 @@ class ChessGame {
   }
 
   private calcualteKnightSteps(position: Position) {
-    const coords: Coordinate[] = [];
-    const { x, y } = position.coord;
-
     const stepRules = [
       [-1, 2],
       [-1, -2],
@@ -356,9 +365,6 @@ class ChessGame {
   }
 
   private calcualteBishopSteps(position: Position) {
-    const coords: Coordinate[] = [];
-    const { x, y } = position.coord;
-
     const stepRules = [
       [-1, 1],
       [1, 1],
@@ -368,10 +374,7 @@ class ChessGame {
     return this.stepsToCoords(position, stepRules);
   }
 
-  private calcualteKingSteps(position: Position) {
-    const coords: Coordinate[] = [];
-    const { x, y } = position.coord;
-
+  private calcualteKingSteps(position: Position, board?: ChessMap) {
     const stepRules = [
       [0, 1],
       [1, 0],
@@ -382,10 +385,10 @@ class ChessGame {
       [1, -1],
       [-1, -1],
     ];
-    return this.stepsToCoords(position, stepRules, 1);
+    return this.stepsToCoords(position, stepRules, 1, board);
   }
 
-  private calcualteRookSteps(position: Position, board?: Position[]) {
+  private calcualteRookSteps(position: Position, board?: ChessMap) {
     const stepRules = [
       [0, 1],
       [1, 0],
@@ -395,7 +398,7 @@ class ChessGame {
     return this.stepsToCoords(position, stepRules, 0, board);
   }
 
-  private calcualtePawnSteps(position: Position, board?: Position[]) {
+  private calcualtePawnSteps(position: Position, board?: ChessMap) {
     const coords: Coordinate[] = [];
     const { x, y } = position.coord;
     if (position.side === Side.w) {
