@@ -115,7 +115,7 @@ class ChessGame {
       [-1, -1],
       [1, 1],
       [1, -1],
-      [-1, -1],
+      [-1, 1],
     ];
 
     for (const stepRule of stepRules) {
@@ -133,9 +133,17 @@ class ChessGame {
         rawSteps = this.calcualtePawnSteps(nearestPiece, assumBoard);
       } else if (nearestPiece?.piece === Piece.r) {
         rawSteps = this.calcualteRookSteps(nearestPiece, assumBoard);
-      }  else if (nearestPiece?.piece === Piece.k) {
+      } else if (nearestPiece?.piece === Piece.k) {
         rawSteps = this.calcualteKingSteps(nearestPiece, assumBoard);
+      } else if (nearestPiece?.piece === Piece.b) {
+        rawSteps = this.calcualteBishopSteps(nearestPiece, assumBoard);
+      } else if (nearestPiece?.piece === Piece.q) {
+        rawSteps = this.calcualteBishopSteps(nearestPiece, assumBoard).concat(
+          this.calcualteRookSteps(nearestPiece, assumBoard),
+        );
       }
+
+      rawSteps = this.removeInvalidPositions(rawSteps);
 
       const foundChecked = rawSteps.find((step) => {
         if (step.x === kingPos.coord.x && step.y === kingPos.coord.y) {
@@ -146,18 +154,29 @@ class ChessGame {
       if (foundChecked) {
         return true;
       }
+    }
 
-      // else if (nearestPiece?.piece === Piece.b) {
-      //   rawSteps = this.calcualteBishopSteps(nearestPiece);
-      // } else if (nearestPiece?.piece === Piece.q) {
-      //   rawSteps = this.calcualteBishopSteps(nearestPiece).concat(
-      //     this.calcualteRookSteps(nearestPiece),
-      //   );
-      // } else if (nearestPiece?.piece === Piece.n) {
-      //   rawSteps = this.calcualteKnightSteps(nearestPiece);
-      // } else if (nearestPiece?.piece === Piece.k) {
-      //   rawSteps = this.calcualteKingSteps(nearestPiece);
-      // }
+    // Knights jump in an L-shape, so they are never on the rays scanned above:
+    // check the 8 squares a knight could attack the king from.
+    const knightOffsets = [
+      [1, 2],
+      [2, 1],
+      [2, -1],
+      [1, -2],
+      [-1, -2],
+      [-2, -1],
+      [-2, 1],
+      [-1, 2],
+    ];
+
+    for (const [dx, dy] of knightOffsets) {
+      const pos = ChessGame.getPosition(
+        { x: kingPos.coord.x + dx, y: kingPos.coord.y + dy },
+        assumBoard,
+      );
+      if (pos?.piece === Piece.n && pos.side !== side) {
+        return true;
+      }
     }
 
     return false;
@@ -243,49 +262,50 @@ class ChessGame {
   }
 
   getAvailableMoves(coord: Coordinate): Coordinate[] {
-    const currPos = this.getPosition(coord);
-    if (!currPos || currPos?.side === undefined) {
+    try {
+      const currPos = this.getPosition(coord);
+      if (!currPos || currPos?.side === undefined) {
+        return [];
+      }
+
+      let rawSteps: Coordinate[] = [];
+      if (currPos?.piece === Piece.p) {
+        rawSteps = this.calcualtePawnSteps(currPos);
+      } else if (currPos?.piece === Piece.r) {
+        rawSteps = this.calcualteRookSteps(currPos);
+      } else if (currPos?.piece === Piece.b) {
+        rawSteps = this.calcualteBishopSteps(currPos);
+      } else if (currPos?.piece === Piece.q) {
+        rawSteps = this.calcualteBishopSteps(currPos).concat(
+          this.calcualteRookSteps(currPos),
+        );
+      } else if (currPos?.piece === Piece.n) {
+        rawSteps = this.calcualteKnightSteps(currPos);
+      } else if (currPos?.piece === Piece.k) {
+        rawSteps = this.calcualteKingSteps(currPos);
+      }
+
+      let validPositions = this.removeInvalidPositions(rawSteps);
+
+      validPositions = validPositions.filter((pos) => {
+        const assumPos = this.getPosition(pos);
+        if (!assumPos) {
+          return false;
+        }
+
+        const assumeBoard = this.getAssumedBoard(currPos, assumPos);
+        if (this.isKingAttacked(assumeBoard, currPos.side as Side)) {
+          return false;
+        }
+
+        return true;
+      });
+
+      return validPositions;
+    } catch (error) {
+      console.log("error", error);
       return [];
     }
-
-    let rawSteps: Coordinate[] = [];
-    if (currPos?.piece === Piece.p) {
-      rawSteps = this.calcualtePawnSteps(currPos);
-    } else if (currPos?.piece === Piece.r) {
-      rawSteps = this.calcualteRookSteps(currPos);
-    } else if (currPos?.piece === Piece.b) {
-      rawSteps = this.calcualteBishopSteps(currPos);
-    } else if (currPos?.piece === Piece.q) {
-      rawSteps = this.calcualteBishopSteps(currPos).concat(
-        this.calcualteRookSteps(currPos),
-      );
-    } else if (currPos?.piece === Piece.n) {
-      rawSteps = this.calcualteKnightSteps(currPos);
-    } else if (currPos?.piece === Piece.k) {
-      rawSteps = this.calcualteKingSteps(currPos);
-    }
-
-    let validPositions = this.removeInvalidPositions(rawSteps);
-
-    validPositions = validPositions.filter((pos) => {
-      const assumPos = this.getPosition(pos);
-      if (!assumPos) {
-        return false;
-      }
-
-      console.log('currPos', currPos)
-      console.log('assumPos', assumPos)
-      const assumeBoard = this.getAssumedBoard(currPos, assumPos);
-      console.log('assumeBoard', assumeBoard)
-
-      if (this.isKingAttacked(assumeBoard, currPos.side as Side)) {
-        return false;
-      }
-
-      return true;
-    });
-
-    return validPositions;
   }
 
   private getPosition(
@@ -350,7 +370,7 @@ class ChessGame {
     return validCoords;
   }
 
-  private calcualteKnightSteps(position: Position) {
+  private calcualteKnightSteps(position: Position, board?: ChessMap) {
     const stepRules = [
       [-1, 2],
       [-1, -2],
@@ -361,17 +381,17 @@ class ChessGame {
       [-2, 1],
       [-2, -1],
     ];
-    return this.stepsToCoords(position, stepRules, 1);
+    return this.stepsToCoords(position, stepRules, 1, board);
   }
 
-  private calcualteBishopSteps(position: Position) {
+  private calcualteBishopSteps(position: Position, board?: ChessMap) {
     const stepRules = [
       [-1, 1],
       [1, 1],
       [1, -1],
       [-1, -1],
     ];
-    return this.stepsToCoords(position, stepRules);
+    return this.stepsToCoords(position, stepRules, 0, board);
   }
 
   private calcualteKingSteps(position: Position, board?: ChessMap) {
@@ -401,6 +421,7 @@ class ChessGame {
   private calcualtePawnSteps(position: Position, board?: ChessMap) {
     const coords: Coordinate[] = [];
     const { x, y } = position.coord;
+
     if (position.side === Side.w) {
       const front1Pos = this.getPosition(
         {
@@ -417,10 +438,10 @@ class ChessGame {
         board,
       );
 
-      if (front1Pos && !front1Pos.piece) {
+      if (front1Pos?.coord && front1Pos.piece === undefined) {
         coords.push(front1Pos.coord);
 
-        if (position.coord.y === 1 && front2Pos && !front2Pos.piece) {
+        if (position.coord.y === 1 && front2Pos?.coord && !front2Pos.piece) {
           coords.push(front2Pos.coord);
         }
       }
@@ -451,10 +472,10 @@ class ChessGame {
         board,
       );
 
-      if (front1Pos && !front1Pos.piece) {
+      if (front1Pos?.coord && front1Pos.piece === undefined) {
         coords.push(front1Pos.coord);
 
-        if (position.coord.y === 6 && front2Pos && !front2Pos.piece) {
+        if (position.coord.y === 6 && front2Pos?.coord && !front2Pos.piece) {
           coords.push(front2Pos.coord);
         }
       }
