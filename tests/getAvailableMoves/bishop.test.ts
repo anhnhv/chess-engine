@@ -32,5 +32,15 @@ describe("getAvailableMoves", () => {
         { x: 4, y: 2 }, { x: 5, y: 1 }, { x: 6, y: 0 },
       ]);
     });
+
+    it("moves only along the pin line when pinned, so the king stays out of check", () => {
+      const game = setup([
+        { x: 4, y: 0, piece: "wk" }, { x: 7, y: 7, piece: "bk" },
+        // The queen on (7, 3) pins the bishop on (5, 1) along the diagonal.
+        { x: 5, y: 1, piece: "wb" }, { x: 7, y: 3, piece: "bq" },
+      ]);
+
+      expectMoves(game, { x: 5, y: 1 }, [{ x: 6, y: 2 }, { x: 7, y: 3 }]);
+    });
   });
 });

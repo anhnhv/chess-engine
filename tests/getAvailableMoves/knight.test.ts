@@ -47,5 +47,15 @@ describe("getAvailableMoves", () => {
         { x: 4, y: 1 }, { x: 4, y: 5 }, { x: 5, y: 2 },
       ]);
     });
+
+    it("does not move when pinned on a row, since every jump exposes the king", () => {
+      const game = setup([
+        { x: 0, y: 3, piece: "wk" }, { x: 7, y: 7, piece: "bk" },
+        // The rook on (7, 3) pins the knight on (3, 3) along row y = 3.
+        { x: 3, y: 3, piece: "wn" }, { x: 7, y: 3, piece: "br" },
+      ]);
+
+      expectMoves(game, { x: 3, y: 3 }, []);
+    });
   });
 });

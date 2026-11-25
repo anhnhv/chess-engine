@@ -166,5 +166,17 @@ describe("getAvailableMoves", () => {
         expectMoves(game, { x: 1, y: 1 }, [{ x: 1, y: 0 }, { x: 0, y: 0 }]);
       });
     });
+
+    it("only captures the pinning piece when pinned on a diagonal", () => {
+      const game = setup([
+        { x: 4, y: 0, piece: "wk" }, { x: 7, y: 7, piece: "bk" },
+        // The bishop on (6, 2) pins the pawn on (5, 1). Pushing the pawn or
+        // capturing the knight on (4, 2) would leave the king in check.
+        { x: 5, y: 1, piece: "wp" }, { x: 6, y: 2, piece: "bb" },
+        { x: 4, y: 2, piece: "bn" },
+      ]);
+
+      expectMoves(game, { x: 5, y: 1 }, [{ x: 6, y: 2 }]);
+    });
   });
 });

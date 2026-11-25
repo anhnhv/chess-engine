@@ -42,5 +42,17 @@ describe("getAvailableMoves", () => {
         { x: 4, y: 2 }, { x: 5, y: 1 }, { x: 6, y: 0 },
       ]);
     });
+
+    it("moves only along the pin line when pinned, so the king stays out of check", () => {
+      const game = setup([
+        { x: 4, y: 0, piece: "wk" }, { x: 7, y: 7, piece: "bk" },
+        // The rook on (4, 6) pins the queen on (4, 2) along column x = 4.
+        { x: 4, y: 2, piece: "wq" }, { x: 4, y: 6, piece: "br" },
+      ]);
+
+      expectMoves(game, { x: 4, y: 2 }, [
+        { x: 4, y: 1 }, { x: 4, y: 3 }, { x: 4, y: 4 }, { x: 4, y: 5 }, { x: 4, y: 6 },
+      ]);
+    });
   });
 });

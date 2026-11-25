@@ -34,5 +34,15 @@ describe("getAvailableMoves", () => {
         { x: 4, y: 3 }, { x: 5, y: 3 },
       ]);
     });
+
+    it("does not move when pinned on a diagonal, since every move exposes the king", () => {
+      const game = setup([
+        { x: 4, y: 0, piece: "wk" }, { x: 7, y: 7, piece: "bk" },
+        // The bishop on (7, 3) pins the rook on (5, 1) to the king.
+        { x: 5, y: 1, piece: "wr" }, { x: 7, y: 3, piece: "bb" },
+      ]);
+
+      expectMoves(game, { x: 5, y: 1 }, []);
+    });
   });
 });
